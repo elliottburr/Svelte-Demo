@@ -1,0 +1,32 @@
+{
+  "name": "svelte-demo",
+  "version": "1.0.0",
+  "description": "",
+  "main": "rollup.config.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "rollup -c -w",
+    "start": "sirv public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/elliottburr/Svelte-Demo.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/elliottburr/Svelte-Demo/issues"
+  },
+  "homepage": "https://github.com/elliottburr/Svelte-Demo#readme",
+  "devDependencies": {
+    "@rollup/plugin-node-resolve": "^13.3.0",
+    "rollup": "^2.76.0",
+    "rollup-plugin-livereload": "^2.0.5",
+    "rollup-plugin-svelte": "^7.1.0",
+    "sirv-cli": "^2.0.2"
+  },
+  "dependencies": {
+    "svelte": "^3.49.0"
+  }
+}
