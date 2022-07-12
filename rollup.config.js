@@ -47,6 +47,9 @@ export default {
     svelte({
       // Tell the svelte plugin where our svelte files are located
       include: './src/**/*.svelte',
+      compilerOptions:{
+        dev: true
+      }
     }),
     // Tell any third-party plugins that we're building for the browser
     resolve({ browser: true }),

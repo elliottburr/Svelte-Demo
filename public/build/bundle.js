@@ -4,6 +4,11 @@ var app = (function () {
     'use strict';
 
     function noop() { }
+    function add_location(element, file, line, column, char) {
+        element.__svelte_meta = {
+            loc: { file, line, column, char }
+        };
+    }
     function run(fn) {
         return fn();
     }
@@ -59,13 +64,13 @@ var app = (function () {
     function children(element) {
         return Array.from(element.childNodes);
     }
-    function set_data(text, data) {
-        data = '' + data;
-        if (text.wholeText !== data)
-            text.data = data;
-    }
     function set_input_value(input, value) {
         input.value = value == null ? '' : value;
+    }
+    function custom_event(type, detail, { bubbles = false, cancelable = false } = {}) {
+        const e = document.createEvent('CustomEvent');
+        e.initCustomEvent(type, bubbles, cancelable, detail);
+        return e;
     }
 
     let current_component;
@@ -194,6 +199,12 @@ var app = (function () {
             callback();
         }
     }
+
+    const globals = (typeof window !== 'undefined'
+        ? window
+        : typeof globalThis !== 'undefined'
+            ? globalThis
+            : global);
     function create_component(block) {
         block && block.c();
     }
@@ -323,6 +334,88 @@ var app = (function () {
         }
     }
 
+    function dispatch_dev(type, detail) {
+        document.dispatchEvent(custom_event(type, Object.assign({ version: '3.49.0' }, detail), { bubbles: true }));
+    }
+    function append_dev(target, node) {
+        dispatch_dev('SvelteDOMInsert', { target, node });
+        append(target, node);
+    }
+    function insert_dev(target, node, anchor) {
+        dispatch_dev('SvelteDOMInsert', { target, node, anchor });
+        insert(target, node, anchor);
+    }
+    function detach_dev(node) {
+        dispatch_dev('SvelteDOMRemove', { node });
+        detach(node);
+    }
+    function listen_dev(node, event, handler, options, has_prevent_default, has_stop_propagation) {
+        const modifiers = options === true ? ['capture'] : options ? Array.from(Object.keys(options)) : [];
+        if (has_prevent_default)
+            modifiers.push('preventDefault');
+        if (has_stop_propagation)
+            modifiers.push('stopPropagation');
+        dispatch_dev('SvelteDOMAddEventListener', { node, event, handler, modifiers });
+        const dispose = listen(node, event, handler, options);
+        return () => {
+            dispatch_dev('SvelteDOMRemoveEventListener', { node, event, handler, modifiers });
+            dispose();
+        };
+    }
+    function attr_dev(node, attribute, value) {
+        attr(node, attribute, value);
+        if (value == null)
+            dispatch_dev('SvelteDOMRemoveAttribute', { node, attribute });
+        else
+            dispatch_dev('SvelteDOMSetAttribute', { node, attribute, value });
+    }
+    function dataset_dev(node, property, value) {
+        node.dataset[property] = value;
+        dispatch_dev('SvelteDOMSetDataset', { node, property, value });
+    }
+    function set_data_dev(text, data) {
+        data = '' + data;
+        if (text.wholeText === data)
+            return;
+        dispatch_dev('SvelteDOMSetData', { node: text, data });
+        text.data = data;
+    }
+    function validate_each_argument(arg) {
+        if (typeof arg !== 'string' && !(arg && typeof arg === 'object' && 'length' in arg)) {
+            let msg = '{#each} only iterates over array-like objects.';
+            if (typeof Symbol === 'function' && arg && Symbol.iterator in arg) {
+                msg += ' You can use a spread to convert this iterable into an array.';
+            }
+            throw new Error(msg);
+        }
+    }
+    function validate_slots(name, slot, keys) {
+        for (const slot_key of Object.keys(slot)) {
+            if (!~keys.indexOf(slot_key)) {
+                console.warn(`<${name}> received an unexpected slot "${slot_key}".`);
+            }
+        }
+    }
+    /**
+     * Base class for Svelte components with some minor dev-enhancements. Used when dev=true.
+     */
+    class SvelteComponentDev extends SvelteComponent {
+        constructor(options) {
+            if (!options || (!options.target && !options.$$inline)) {
+                throw new Error("'target' is a required option");
+            }
+            super();
+        }
+        $destroy() {
+            super.$destroy();
+            this.$destroy = () => {
+                console.warn('Component was already destroyed'); // eslint-disable-line no-console
+            };
+        }
+        $capture_state() { }
+        $inject_state() { }
+    }
+
     const subscriber_queue = [];
     /**
      * Create a `Writable` store that allows both updating and reading by subscription.
@@ -374,8 +467,14 @@ var app = (function () {
     const toDoList = writable([{date: '9/20/2022', task:"apply to job"}]);
     const playerData = writable([]);
     const count = writable(0);
+    // Object {
+    //     set: value,
+    //     subscribe: f(n),
+    //     update: f(n),
+    // }
 
     /* src/Task.svelte generated by Svelte v3.49.0 */
+    const file$2 = "src/Task.svelte";
 
     function create_fragment$2(ctx) {
     	let li;
@@ -387,8 +486,8 @@ var app = (function () {
     	let mounted;
     	let dispose;
 
-    	return {
-    		c() {
+    	const block = {
+    		c: function create() {
     			li = element("li");
     			t0 = text(/*taskDate*/ ctx[0]);
     			t1 = text(": ");
@@ -396,44 +495,68 @@ var app = (function () {
     			t3 = space();
     			button = element("button");
     			button.textContent = "Delete";
-    			attr(li, "idx", /*idx*/ ctx[2]);
+    			add_location(button, file$2, 18, 29, 347);
+    			attr_dev(li, "idx", /*idx*/ ctx[2]);
+    			add_location(li, file$2, 18, 0, 318);
     		},
-    		m(target, anchor) {
-    			insert(target, li, anchor);
-    			append(li, t0);
-    			append(li, t1);
-    			append(li, t2);
-    			append(li, t3);
-    			append(li, button);
+    		l: function claim(nodes) {
+    			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, li, anchor);
+    			append_dev(li, t0);
+    			append_dev(li, t1);
+    			append_dev(li, t2);
+    			append_dev(li, t3);
+    			append_dev(li, button);
 
     			if (!mounted) {
-    				dispose = listen(button, "click", function () {
-    					if (is_function(/*deleteTask*/ ctx[3](/*idx*/ ctx[2]))) /*deleteTask*/ ctx[3](/*idx*/ ctx[2]).apply(this, arguments);
-    				});
+    				dispose = listen_dev(
+    					button,
+    					"click",
+    					function () {
+    						if (is_function(/*deleteTask*/ ctx[3](/*idx*/ ctx[2]))) /*deleteTask*/ ctx[3](/*idx*/ ctx[2]).apply(this, arguments);
+    					},
+    					false,
+    					false,
+    					false
+    				);
 
     				mounted = true;
     			}
     		},
-    		p(new_ctx, [dirty]) {
+    		p: function update(new_ctx, [dirty]) {
     			ctx = new_ctx;
-    			if (dirty & /*taskDate*/ 1) set_data(t0, /*taskDate*/ ctx[0]);
-    			if (dirty & /*task*/ 2) set_data(t2, /*task*/ ctx[1]);
+    			if (dirty & /*taskDate*/ 1) set_data_dev(t0, /*taskDate*/ ctx[0]);
+    			if (dirty & /*task*/ 2) set_data_dev(t2, /*task*/ ctx[1]);
 
     			if (dirty & /*idx*/ 4) {
-    				attr(li, "idx", /*idx*/ ctx[2]);
+    				attr_dev(li, "idx", /*idx*/ ctx[2]);
     			}
     		},
     		i: noop,
     		o: noop,
-    		d(detaching) {
-    			if (detaching) detach(li);
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(li);
     			mounted = false;
     			dispose();
     		}
     	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_fragment$2.name,
+    		type: "component",
+    		source: "",
+    		ctx
+    	});
+
+    	return block;
     }
 
     function instance$2($$self, $$props, $$invalidate) {
+    	let { $$slots: slots = {}, $$scope } = $$props;
+    	validate_slots('Task', slots, []);
     	let { taskDate } = $$props;
     	let { task } = $$props;
     	let { idx } = $$props;
@@ -447,23 +570,97 @@ var app = (function () {
     		toDoList.update(() => list.slice(0, idx).concat(list.slice(idx + 1, list.length)));
     	}
 
+    	const writable_props = ['taskDate', 'task', 'idx'];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== '$$' && key !== 'slot') console.warn(`<Task> was created with unknown prop '${key}'`);
+    	});
+
     	$$self.$$set = $$props => {
     		if ('taskDate' in $$props) $$invalidate(0, taskDate = $$props.taskDate);
     		if ('task' in $$props) $$invalidate(1, task = $$props.task);
     		if ('idx' in $$props) $$invalidate(2, idx = $$props.idx);
     	};
 
+    	$$self.$capture_state = () => ({
+    		toDoList,
+    		taskDate,
+    		task,
+    		idx,
+    		list,
+    		deleteTask
+    	});
+
+    	$$self.$inject_state = $$props => {
+    		if ('taskDate' in $$props) $$invalidate(0, taskDate = $$props.taskDate);
+    		if ('task' in $$props) $$invalidate(1, task = $$props.task);
+    		if ('idx' in $$props) $$invalidate(2, idx = $$props.idx);
+    		if ('list' in $$props) list = $$props.list;
+    	};
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
+
     	return [taskDate, task, idx, deleteTask];
     }
 
-    class Task extends SvelteComponent {
+    class Task extends SvelteComponentDev {
     	constructor(options) {
-    		super();
+    		super(options);
     		init(this, options, instance$2, create_fragment$2, safe_not_equal, { taskDate: 0, task: 1, idx: 2 });
+
+    		dispatch_dev("SvelteRegisterComponent", {
+    			component: this,
+    			tagName: "Task",
+    			options,
+    			id: create_fragment$2.name
+    		});
+
+    		const { ctx } = this.$$;
+    		const props = options.props || {};
+
+    		if (/*taskDate*/ ctx[0] === undefined && !('taskDate' in props)) {
+    			console.warn("<Task> was created without expected prop 'taskDate'");
+    		}
+
+    		if (/*task*/ ctx[1] === undefined && !('task' in props)) {
+    			console.warn("<Task> was created without expected prop 'task'");
+    		}
+
+    		if (/*idx*/ ctx[2] === undefined && !('idx' in props)) {
+    			console.warn("<Task> was created without expected prop 'idx'");
+    		}
+    	}
+
+    	get taskDate() {
+    		throw new Error("<Task>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	set taskDate(value) {
+    		throw new Error("<Task>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	get task() {
+    		throw new Error("<Task>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	set task(value) {
+    		throw new Error("<Task>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	get idx() {
+    		throw new Error("<Task>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	set idx(value) {
+    		throw new Error("<Task>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
     	}
     }
 
     /* src/Stats.svelte generated by Svelte v3.49.0 */
+
+    const file$1 = "src/Stats.svelte";
 
     function create_fragment$1(ctx) {
     	let div;
@@ -484,8 +681,8 @@ var app = (function () {
     	let t9;
     	let t10;
 
-    	return {
-    		c() {
+    	const block = {
+    		c: function create() {
     			div = element("div");
     			ul = element("ul");
     			li0 = element("li");
@@ -503,45 +700,71 @@ var app = (function () {
     			li3 = element("li");
     			t9 = text("Position: ");
     			t10 = text(/*position*/ ctx[3]);
+    			add_location(li0, file$1, 9, 8, 141);
+    			add_location(li1, file$1, 10, 8, 182);
+    			add_location(li2, file$1, 11, 8, 221);
+    			add_location(li3, file$1, 12, 8, 259);
+    			add_location(ul, file$1, 8, 4, 128);
+    			add_location(div, file$1, 7, 0, 117);
     		},
-    		m(target, anchor) {
-    			insert(target, div, anchor);
-    			append(div, ul);
-    			append(ul, li0);
-    			append(li0, t0);
-    			append(li0, t1);
-    			append(ul, t2);
-    			append(ul, li1);
-    			append(li1, t3);
-    			append(li1, t4);
-    			append(ul, t5);
-    			append(ul, li2);
-    			append(li2, t6);
-    			append(li2, t7);
-    			append(ul, t8);
-    			append(ul, li3);
-    			append(li3, t9);
-    			append(li3, t10);
+    		l: function claim(nodes) {
+    			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
-    		p(ctx, [dirty]) {
-    			if (dirty & /*firstName*/ 1) set_data(t1, /*firstName*/ ctx[0]);
-    			if (dirty & /*lastName*/ 2) set_data(t4, /*lastName*/ ctx[1]);
-    			if (dirty & /*team*/ 4) set_data(t7, /*team*/ ctx[2]);
-    			if (dirty & /*position*/ 8) set_data(t10, /*position*/ ctx[3]);
+    		m: function mount(target, anchor) {
+    			insert_dev(target, div, anchor);
+    			append_dev(div, ul);
+    			append_dev(ul, li0);
+    			append_dev(li0, t0);
+    			append_dev(li0, t1);
+    			append_dev(ul, t2);
+    			append_dev(ul, li1);
+    			append_dev(li1, t3);
+    			append_dev(li1, t4);
+    			append_dev(ul, t5);
+    			append_dev(ul, li2);
+    			append_dev(li2, t6);
+    			append_dev(li2, t7);
+    			append_dev(ul, t8);
+    			append_dev(ul, li3);
+    			append_dev(li3, t9);
+    			append_dev(li3, t10);
+    		},
+    		p: function update(ctx, [dirty]) {
+    			if (dirty & /*firstName*/ 1) set_data_dev(t1, /*firstName*/ ctx[0]);
+    			if (dirty & /*lastName*/ 2) set_data_dev(t4, /*lastName*/ ctx[1]);
+    			if (dirty & /*team*/ 4) set_data_dev(t7, /*team*/ ctx[2]);
+    			if (dirty & /*position*/ 8) set_data_dev(t10, /*position*/ ctx[3]);
     		},
     		i: noop,
     		o: noop,
-    		d(detaching) {
-    			if (detaching) detach(div);
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(div);
     		}
     	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_fragment$1.name,
+    		type: "component",
+    		source: "",
+    		ctx
+    	});
+
+    	return block;
     }
 
     function instance$1($$self, $$props, $$invalidate) {
+    	let { $$slots: slots = {}, $$scope } = $$props;
+    	validate_slots('Stats', slots, []);
     	let { firstName } = $$props;
     	let { lastName } = $$props;
     	let { team } = $$props;
     	let { position } = $$props;
+    	const writable_props = ['firstName', 'lastName', 'team', 'position'];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== '$$' && key !== 'slot') console.warn(`<Stats> was created with unknown prop '${key}'`);
+    	});
 
     	$$self.$$set = $$props => {
     		if ('firstName' in $$props) $$invalidate(0, firstName = $$props.firstName);
@@ -550,12 +773,25 @@ var app = (function () {
     		if ('position' in $$props) $$invalidate(3, position = $$props.position);
     	};
 
+    	$$self.$capture_state = () => ({ firstName, lastName, team, position });
+
+    	$$self.$inject_state = $$props => {
+    		if ('firstName' in $$props) $$invalidate(0, firstName = $$props.firstName);
+    		if ('lastName' in $$props) $$invalidate(1, lastName = $$props.lastName);
+    		if ('team' in $$props) $$invalidate(2, team = $$props.team);
+    		if ('position' in $$props) $$invalidate(3, position = $$props.position);
+    	};
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
+
     	return [firstName, lastName, team, position];
     }
 
-    class Stats extends SvelteComponent {
+    class Stats extends SvelteComponentDev {
     	constructor(options) {
-    		super();
+    		super(options);
 
     		init(this, options, instance$1, create_fragment$1, safe_not_equal, {
     			firstName: 0,
@@ -563,10 +799,71 @@ var app = (function () {
     			team: 2,
     			position: 3
     		});
+
+    		dispatch_dev("SvelteRegisterComponent", {
+    			component: this,
+    			tagName: "Stats",
+    			options,
+    			id: create_fragment$1.name
+    		});
+
+    		const { ctx } = this.$$;
+    		const props = options.props || {};
+
+    		if (/*firstName*/ ctx[0] === undefined && !('firstName' in props)) {
+    			console.warn("<Stats> was created without expected prop 'firstName'");
+    		}
+
+    		if (/*lastName*/ ctx[1] === undefined && !('lastName' in props)) {
+    			console.warn("<Stats> was created without expected prop 'lastName'");
+    		}
+
+    		if (/*team*/ ctx[2] === undefined && !('team' in props)) {
+    			console.warn("<Stats> was created without expected prop 'team'");
+    		}
+
+    		if (/*position*/ ctx[3] === undefined && !('position' in props)) {
+    			console.warn("<Stats> was created without expected prop 'position'");
+    		}
+    	}
+
+    	get firstName() {
+    		throw new Error("<Stats>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	set firstName(value) {
+    		throw new Error("<Stats>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	get lastName() {
+    		throw new Error("<Stats>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	set lastName(value) {
+    		throw new Error("<Stats>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	get team() {
+    		throw new Error("<Stats>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	set team(value) {
+    		throw new Error("<Stats>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	get position() {
+    		throw new Error("<Stats>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	set position(value) {
+    		throw new Error("<Stats>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
     	}
     }
 
     /* src/App.svelte generated by Svelte v3.49.0 */
+
+    const { console: console_1 } = globals;
+    const file = "src/App.svelte";
 
     function get_each_context(ctx, list, i) {
     	const child_ctx = ctx.slice();
@@ -582,7 +879,7 @@ var app = (function () {
     	return child_ctx;
     }
 
-    // (85:4) {#each list as task, idx}
+    // (83:4) {#each list as task, idx}
     function create_each_block_1(ctx) {
     	let task;
     	let current;
@@ -592,39 +889,50 @@ var app = (function () {
     				taskDate: /*task*/ ctx[18].date,
     				task: /*task*/ ctx[18].task,
     				idx: /*idx*/ ctx[17]
-    			}
+    			},
+    			$$inline: true
     		});
 
-    	return {
-    		c() {
+    	const block = {
+    		c: function create() {
     			create_component(task.$$.fragment);
     		},
-    		m(target, anchor) {
+    		m: function mount(target, anchor) {
     			mount_component(task, target, anchor);
     			current = true;
     		},
-    		p(ctx, dirty) {
+    		p: function update(ctx, dirty) {
     			const task_changes = {};
     			if (dirty & /*list*/ 4) task_changes.taskDate = /*task*/ ctx[18].date;
     			if (dirty & /*list*/ 4) task_changes.task = /*task*/ ctx[18].task;
     			task.$set(task_changes);
     		},
-    		i(local) {
+    		i: function intro(local) {
     			if (current) return;
     			transition_in(task.$$.fragment, local);
     			current = true;
     		},
-    		o(local) {
+    		o: function outro(local) {
     			transition_out(task.$$.fragment, local);
     			current = false;
     		},
-    		d(detaching) {
+    		d: function destroy(detaching) {
     			destroy_component(task, detaching);
     		}
     	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_each_block_1.name,
+    		type: "each",
+    		source: "(83:4) {#each list as task, idx}",
+    		ctx
+    	});
+
+    	return block;
     }
 
-    // (100:4) {#each playerList as player, idx}
+    // (98:4) {#each playerList as player, idx}
     function create_each_block(ctx) {
     	let stats;
     	let current;
@@ -635,18 +943,19 @@ var app = (function () {
     				lastName: /*playerList*/ ctx[5][/*idx*/ ctx[17]].lastName,
     				team: /*playerList*/ ctx[5][/*idx*/ ctx[17]].team,
     				position: /*playerList*/ ctx[5][/*idx*/ ctx[17]].position
-    			}
+    			},
+    			$$inline: true
     		});
 
-    	return {
-    		c() {
+    	const block = {
+    		c: function create() {
     			create_component(stats.$$.fragment);
     		},
-    		m(target, anchor) {
+    		m: function mount(target, anchor) {
     			mount_component(stats, target, anchor);
     			current = true;
     		},
-    		p(ctx, dirty) {
+    		p: function update(ctx, dirty) {
     			const stats_changes = {};
     			if (dirty & /*playerList*/ 32) stats_changes.firstName = /*playerList*/ ctx[5][/*idx*/ ctx[17]].firstName;
     			if (dirty & /*playerList*/ 32) stats_changes.lastName = /*playerList*/ ctx[5][/*idx*/ ctx[17]].lastName;
@@ -654,19 +963,29 @@ var app = (function () {
     			if (dirty & /*playerList*/ 32) stats_changes.position = /*playerList*/ ctx[5][/*idx*/ ctx[17]].position;
     			stats.$set(stats_changes);
     		},
-    		i(local) {
+    		i: function intro(local) {
     			if (current) return;
     			transition_in(stats.$$.fragment, local);
     			current = true;
     		},
-    		o(local) {
+    		o: function outro(local) {
     			transition_out(stats.$$.fragment, local);
     			current = false;
     		},
-    		d(detaching) {
+    		d: function destroy(detaching) {
     			destroy_component(stats, detaching);
     		}
     	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_each_block.name,
+    		type: "each",
+    		source: "(98:4) {#each playerList as player, idx}",
+    		ctx
+    	});
+
+    	return block;
     }
 
     function create_fragment(ctx) {
@@ -708,6 +1027,7 @@ var app = (function () {
     	let mounted;
     	let dispose;
     	let each_value_1 = /*list*/ ctx[2];
+    	validate_each_argument(each_value_1);
     	let each_blocks_1 = [];
 
     	for (let i = 0; i < each_value_1.length; i += 1) {
@@ -719,6 +1039,7 @@ var app = (function () {
     	});
 
     	let each_value = /*playerList*/ ctx[5];
+    	validate_each_argument(each_value);
     	let each_blocks = [];
 
     	for (let i = 0; i < each_value.length; i += 1) {
@@ -729,8 +1050,8 @@ var app = (function () {
     		each_blocks[i] = null;
     	});
 
-    	return {
-    		c() {
+    	const block = {
+    		c: function create() {
     			p = element("p");
     			t0 = text("Hello ");
     			t1 = text(/*name*/ ctx[0]);
@@ -779,61 +1100,80 @@ var app = (function () {
     				each_blocks[i].c();
     			}
 
-    			attr(input0, "type", "text");
-    			attr(input0, "placeholder", "Date");
-    			attr(input0, "name", "date");
-    			attr(input1, "type", "text");
-    			attr(input1, "placeholder", "Task");
-    			attr(input1, "name", "task");
-    			attr(div1, "class", "listInputs");
-    			attr(input2, "type", "text");
-    			attr(input2, "placeholder", "playerID");
-    			attr(input2, "name", "playerID");
-    			attr(div2, "class", "statsinput");
+    			add_location(p, file, 69, 0, 1413);
+    			add_location(div0, file, 70, 0, 1440);
+    			add_location(button0, file, 71, 0, 1477);
+    			add_location(button1, file, 72, 0, 1517);
+    			add_location(br, file, 73, 0, 1557);
+    			add_location(hr0, file, 74, 0, 1562);
+    			attr_dev(input0, "type", "text");
+    			attr_dev(input0, "placeholder", "Date");
+    			attr_dev(input0, "name", "date");
+    			add_location(input0, file, 77, 4, 1597);
+    			attr_dev(input1, "type", "text");
+    			attr_dev(input1, "placeholder", "Task");
+    			attr_dev(input1, "name", "task");
+    			add_location(input1, file, 78, 4, 1674);
+    			add_location(button2, file, 79, 4, 1751);
+    			attr_dev(div1, "class", "listInputs");
+    			add_location(div1, file, 76, 0, 1568);
+    			add_location(ul0, file, 81, 0, 1819);
+    			add_location(hr1, file, 90, 0, 1978);
+    			attr_dev(input2, "type", "text");
+    			attr_dev(input2, "placeholder", "playerID");
+    			attr_dev(input2, "name", "playerID");
+    			add_location(input2, file, 93, 4, 2013);
+    			add_location(button3, file, 94, 4, 2103);
+    			attr_dev(div2, "class", "statsinput");
+    			add_location(div2, file, 92, 0, 1984);
+    			add_location(ul1, file, 96, 0, 2172);
     		},
-    		m(target, anchor) {
-    			insert(target, p, anchor);
-    			append(p, t0);
-    			append(p, t1);
-    			append(p, t2);
-    			insert(target, t3, anchor);
-    			insert(target, div0, anchor);
-    			append(div0, t4);
-    			append(div0, t5);
-    			insert(target, t6, anchor);
-    			insert(target, button0, anchor);
-    			insert(target, t8, anchor);
-    			insert(target, button1, anchor);
-    			insert(target, t10, anchor);
-    			insert(target, br, anchor);
-    			insert(target, t11, anchor);
-    			insert(target, hr0, anchor);
-    			insert(target, t12, anchor);
-    			insert(target, div1, anchor);
-    			append(div1, input0);
+    		l: function claim(nodes) {
+    			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, p, anchor);
+    			append_dev(p, t0);
+    			append_dev(p, t1);
+    			append_dev(p, t2);
+    			insert_dev(target, t3, anchor);
+    			insert_dev(target, div0, anchor);
+    			append_dev(div0, t4);
+    			append_dev(div0, t5);
+    			insert_dev(target, t6, anchor);
+    			insert_dev(target, button0, anchor);
+    			insert_dev(target, t8, anchor);
+    			insert_dev(target, button1, anchor);
+    			insert_dev(target, t10, anchor);
+    			insert_dev(target, br, anchor);
+    			insert_dev(target, t11, anchor);
+    			insert_dev(target, hr0, anchor);
+    			insert_dev(target, t12, anchor);
+    			insert_dev(target, div1, anchor);
+    			append_dev(div1, input0);
     			set_input_value(input0, /*newDate*/ ctx[3]);
-    			append(div1, t13);
-    			append(div1, input1);
+    			append_dev(div1, t13);
+    			append_dev(div1, input1);
     			set_input_value(input1, /*newTask*/ ctx[4]);
-    			append(div1, t14);
-    			append(div1, button2);
-    			insert(target, t16, anchor);
-    			insert(target, ul0, anchor);
+    			append_dev(div1, t14);
+    			append_dev(div1, button2);
+    			insert_dev(target, t16, anchor);
+    			insert_dev(target, ul0, anchor);
 
     			for (let i = 0; i < each_blocks_1.length; i += 1) {
     				each_blocks_1[i].m(ul0, null);
     			}
 
-    			insert(target, t17, anchor);
-    			insert(target, hr1, anchor);
-    			insert(target, t18, anchor);
-    			insert(target, div2, anchor);
-    			append(div2, input2);
+    			insert_dev(target, t17, anchor);
+    			insert_dev(target, hr1, anchor);
+    			insert_dev(target, t18, anchor);
+    			insert_dev(target, div2, anchor);
+    			append_dev(div2, input2);
     			set_input_value(input2, /*newPlayerID*/ ctx[6]);
-    			append(div2, t19);
-    			append(div2, button3);
-    			insert(target, t21, anchor);
-    			insert(target, ul1, anchor);
+    			append_dev(div2, t19);
+    			append_dev(div2, button3);
+    			insert_dev(target, t21, anchor);
+    			insert_dev(target, ul1, anchor);
 
     			for (let i = 0; i < each_blocks.length; i += 1) {
     				each_blocks[i].m(ul1, null);
@@ -843,26 +1183,40 @@ var app = (function () {
 
     			if (!mounted) {
     				dispose = [
-    					listen(button0, "click", /*increment*/ ctx[7]),
-    					listen(button1, "click", /*decrement*/ ctx[8]),
-    					listen(input0, "input", /*input0_input_handler*/ ctx[11]),
-    					listen(input1, "input", /*input1_input_handler*/ ctx[12]),
-    					listen(button2, "click", function () {
-    						if (is_function(/*addList*/ ctx[9](/*newDate*/ ctx[3], /*newTask*/ ctx[4]))) /*addList*/ ctx[9](/*newDate*/ ctx[3], /*newTask*/ ctx[4]).apply(this, arguments);
-    					}),
-    					listen(input2, "input", /*input2_input_handler*/ ctx[13]),
-    					listen(button3, "click", function () {
-    						if (is_function(/*addPlayer*/ ctx[10](/*newPlayerID*/ ctx[6]))) /*addPlayer*/ ctx[10](/*newPlayerID*/ ctx[6]).apply(this, arguments);
-    					})
+    					listen_dev(button0, "click", /*increment*/ ctx[7], false, false, false),
+    					listen_dev(button1, "click", /*decrement*/ ctx[8], false, false, false),
+    					listen_dev(input0, "input", /*input0_input_handler*/ ctx[11]),
+    					listen_dev(input1, "input", /*input1_input_handler*/ ctx[12]),
+    					listen_dev(
+    						button2,
+    						"click",
+    						function () {
+    							if (is_function(/*addList*/ ctx[9](/*newDate*/ ctx[3], /*newTask*/ ctx[4]))) /*addList*/ ctx[9](/*newDate*/ ctx[3], /*newTask*/ ctx[4]).apply(this, arguments);
+    						},
+    						false,
+    						false,
+    						false
+    					),
+    					listen_dev(input2, "input", /*input2_input_handler*/ ctx[13]),
+    					listen_dev(
+    						button3,
+    						"click",
+    						function () {
+    							if (is_function(/*addPlayer*/ ctx[10](/*newPlayerID*/ ctx[6]))) /*addPlayer*/ ctx[10](/*newPlayerID*/ ctx[6]).apply(this, arguments);
+    						},
+    						false,
+    						false,
+    						false
+    					)
     				];
 
     				mounted = true;
     			}
     		},
-    		p(new_ctx, [dirty]) {
+    		p: function update(new_ctx, [dirty]) {
     			ctx = new_ctx;
-    			if (!current || dirty & /*name*/ 1) set_data(t1, /*name*/ ctx[0]);
-    			if (!current || dirty & /*countValue*/ 2) set_data(t5, /*countValue*/ ctx[1]);
+    			if (!current || dirty & /*name*/ 1) set_data_dev(t1, /*name*/ ctx[0]);
+    			if (!current || dirty & /*countValue*/ 2) set_data_dev(t5, /*countValue*/ ctx[1]);
 
     			if (dirty & /*newDate*/ 8 && input0.value !== /*newDate*/ ctx[3]) {
     				set_input_value(input0, /*newDate*/ ctx[3]);
@@ -874,6 +1228,7 @@ var app = (function () {
 
     			if (dirty & /*list*/ 4) {
     				each_value_1 = /*list*/ ctx[2];
+    				validate_each_argument(each_value_1);
     				let i;
 
     				for (i = 0; i < each_value_1.length; i += 1) {
@@ -905,6 +1260,7 @@ var app = (function () {
 
     			if (dirty & /*playerList*/ 32) {
     				each_value = /*playerList*/ ctx[5];
+    				validate_each_argument(each_value);
     				let i;
 
     				for (i = 0; i < each_value.length; i += 1) {
@@ -930,7 +1286,7 @@ var app = (function () {
     				check_outros();
     			}
     		},
-    		i(local) {
+    		i: function intro(local) {
     			if (current) return;
 
     			for (let i = 0; i < each_value_1.length; i += 1) {
@@ -943,7 +1299,7 @@ var app = (function () {
 
     			current = true;
     		},
-    		o(local) {
+    		o: function outro(local) {
     			each_blocks_1 = each_blocks_1.filter(Boolean);
 
     			for (let i = 0; i < each_blocks_1.length; i += 1) {
@@ -958,37 +1314,49 @@ var app = (function () {
 
     			current = false;
     		},
-    		d(detaching) {
-    			if (detaching) detach(p);
-    			if (detaching) detach(t3);
-    			if (detaching) detach(div0);
-    			if (detaching) detach(t6);
-    			if (detaching) detach(button0);
-    			if (detaching) detach(t8);
-    			if (detaching) detach(button1);
-    			if (detaching) detach(t10);
-    			if (detaching) detach(br);
-    			if (detaching) detach(t11);
-    			if (detaching) detach(hr0);
-    			if (detaching) detach(t12);
-    			if (detaching) detach(div1);
-    			if (detaching) detach(t16);
-    			if (detaching) detach(ul0);
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(p);
+    			if (detaching) detach_dev(t3);
+    			if (detaching) detach_dev(div0);
+    			if (detaching) detach_dev(t6);
+    			if (detaching) detach_dev(button0);
+    			if (detaching) detach_dev(t8);
+    			if (detaching) detach_dev(button1);
+    			if (detaching) detach_dev(t10);
+    			if (detaching) detach_dev(br);
+    			if (detaching) detach_dev(t11);
+    			if (detaching) detach_dev(hr0);
+    			if (detaching) detach_dev(t12);
+    			if (detaching) detach_dev(div1);
+    			if (detaching) detach_dev(t16);
+    			if (detaching) detach_dev(ul0);
     			destroy_each(each_blocks_1, detaching);
-    			if (detaching) detach(t17);
-    			if (detaching) detach(hr1);
-    			if (detaching) detach(t18);
-    			if (detaching) detach(div2);
-    			if (detaching) detach(t21);
-    			if (detaching) detach(ul1);
+    			if (detaching) detach_dev(t17);
+    			if (detaching) detach_dev(hr1);
+    			if (detaching) detach_dev(t18);
+    			if (detaching) detach_dev(div2);
+    			if (detaching) detach_dev(t21);
+    			if (detaching) detach_dev(ul1);
     			destroy_each(each_blocks, detaching);
     			mounted = false;
     			run_all(dispose);
     		}
     	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_fragment.name,
+    		type: "component",
+    		source: "",
+    		ctx
+    	});
+
+    	return block;
     }
 
     function instance($$self, $$props, $$invalidate) {
+    	let { $$slots: slots = {}, $$scope } = $$props;
+    	validate_slots('App', slots, []);
     	let { name } = $$props;
     	let countValue;
     	let list;
@@ -1041,6 +1409,12 @@ var app = (function () {
     		console.log(playerList);
     	}
 
+    	const writable_props = ['name'];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== '$$' && key !== 'slot') console_1.warn(`<App> was created with unknown prop '${key}'`);
+    	});
+
     	function input0_input_handler() {
     		newDate = this.value;
     		$$invalidate(3, newDate);
@@ -1060,6 +1434,42 @@ var app = (function () {
     		if ('name' in $$props) $$invalidate(0, name = $$props.name);
     	};
 
+    	$$self.$capture_state = () => ({
+    		count,
+    		toDoList,
+    		playerData,
+    		Task,
+    		Stats,
+    		dataset_dev,
+    		name,
+    		countValue,
+    		list,
+    		newDate,
+    		newTask,
+    		playerList,
+    		newPlayerID,
+    		data,
+    		increment,
+    		decrement,
+    		addList,
+    		addPlayer
+    	});
+
+    	$$self.$inject_state = $$props => {
+    		if ('name' in $$props) $$invalidate(0, name = $$props.name);
+    		if ('countValue' in $$props) $$invalidate(1, countValue = $$props.countValue);
+    		if ('list' in $$props) $$invalidate(2, list = $$props.list);
+    		if ('newDate' in $$props) $$invalidate(3, newDate = $$props.newDate);
+    		if ('newTask' in $$props) $$invalidate(4, newTask = $$props.newTask);
+    		if ('playerList' in $$props) $$invalidate(5, playerList = $$props.playerList);
+    		if ('newPlayerID' in $$props) $$invalidate(6, newPlayerID = $$props.newPlayerID);
+    		if ('data' in $$props) data = $$props.data;
+    	};
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
+
     	return [
     		name,
     		countValue,
@@ -1078,15 +1488,37 @@ var app = (function () {
     	];
     }
 
-    class App extends SvelteComponent {
+    class App extends SvelteComponentDev {
     	constructor(options) {
-    		super();
+    		super(options);
     		init(this, options, instance, create_fragment, safe_not_equal, { name: 0 });
+
+    		dispatch_dev("SvelteRegisterComponent", {
+    			component: this,
+    			tagName: "App",
+    			options,
+    			id: create_fragment.name
+    		});
+
+    		const { ctx } = this.$$;
+    		const props = options.props || {};
+
+    		if (/*name*/ ctx[0] === undefined && !('name' in props)) {
+    			console_1.warn("<App> was created without expected prop 'name'");
+    		}
+    	}
+
+    	get name() {
+    		throw new Error("<App>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	set name(value) {
+    		throw new Error("<App>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
     	}
     }
 
     const app = new App({
-        target: document.body,
+        target: document.getElementById('root'),
         props: {
             name: 'world'
         }

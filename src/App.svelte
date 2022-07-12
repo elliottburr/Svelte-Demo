@@ -65,8 +65,6 @@
         console.log(playerList)
     }
 
-
-
 </script>
 
 <p>Hello {name} !!!!!!</p>
@@ -108,4 +106,7 @@
 </ul>
 
 <style>
+  body{
+    background-color: white,
+  }
 </style>
